@@ -88,16 +88,13 @@ let currentSession = 'current';
 let dateFrom = '', dateTo = '';
 
 const params = new URLSearchParams(location.search);
-const id = params.get('id');
-const apiBase = params.get('api') || localStorage.getItem('apiBase') || '';
+const token = params.get('token');
+// API base is hardcoded — never exposed in the URL
+const apiBase = 'https://telegram-admin-bot.fly.dev';
 
-if (!id) {
-  document.getElementById('error').textContent = '缺少 id 参数';
-} else if (!apiBase) {
-  document.getElementById('error').innerHTML =
-    '缺少 API 地址。请在 URL 中加入 ?api=https://your-bot-server.com&id=' + id;
+if (!token) {
+  document.getElementById('error').textContent = '缺少 token 参数';
 } else {
-  localStorage.setItem('apiBase', apiBase);
   loadData();
   loadGroups();
 }
@@ -131,7 +128,7 @@ async function loadGroups() {
 
 async function loadData() {
   try {
-    const res = await fetch(`${apiBase}/api/data?id=${id}`, {
+    const res = await fetch(`${apiBase}/api/data?token=${token}`, {
       headers: { 'ngrok-skip-browser-warning': '1' }
     });
     if (!res.ok) throw new Error(await res.text());
