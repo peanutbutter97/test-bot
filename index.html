@@ -51,6 +51,14 @@
 </div>
 
 <div class="card">
+  <h3>记账分类 — 按操作员</h3>
+  <table id="opTable">
+    <thead><tr><th>操作员</th><th>总入</th><th>总出</th><th>剩余</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<div class="card">
   <h3>入账记录</h3>
   <table id="entriesTable">
     <thead><tr><th>时间</th><th>金额</th><th>USDT</th></tr></thead>
@@ -147,6 +155,24 @@ function renderSession(key) {
     <div class="stat"><label>已下发</label><span>${disbursed.toFixed(2)} USDT</span></div>
     <div class="stat"><label>待下发</label><span class="${pending < 0 ? 'neg' : 'pos'}">${pending.toFixed(2)} USDT</span></div>
   `;
+
+  // Operator grouping
+  const opTbody = document.querySelector('#opTable tbody');
+  opTbody.innerHTML = '';
+  const byOp = s.by_operator || [];
+  if (byOp.length) {
+    byOp.forEach(g => {
+      const netCls = g.net >= 0 ? 'pos' : 'neg';
+      opTbody.innerHTML += `<tr>
+        <td>${g.operator}</td>
+        <td class="pos">+${g.inflow.toFixed(2)}</td>
+        <td class="neg">${g.outflow.toFixed(2)}</td>
+        <td class="${netCls}">${g.net.toFixed(2)}</td>
+      </tr>`;
+    });
+  } else {
+    opTbody.innerHTML = '<tr><td colspan="4" style="color:#999">无数据</td></tr>';
+  }
 
   // Entries table
   const eTbody = document.querySelector('#entriesTable tbody');
