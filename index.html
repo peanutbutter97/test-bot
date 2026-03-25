@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>记账机器人账单</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<style>
+  body { font-family: sans-serif; max-width: 900px; margin: 0 auto; padding: 16px; background: #f5f5f5; }
+  h2 { color: #333; }
+  .card { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+  .summary { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .stat { background: #f0f4ff; border-radius: 6px; padding: 10px; }
+  .stat label { font-size: 12px; color: #666; }
+  .stat span { display: block; font-size: 20px; font-weight: bold; color: #333; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { background: #f0f0f0; padding: 8px; text-align: left; }
+  td { padding: 8px; border-bottom: 1px solid #eee; }
+  .pos { color: #16a34a; } .neg { color: #dc2626; }
+  button { background: #2563eb; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; margin-right: 8px; }
+  button:hover { background: #1d4ed8; }
+  .session-tab { display: inline-block; padding: 6px 12px; margin: 4px; border-radius: 4px; cursor: pointer; background: #e5e7eb; }
+  .session-tab.active { background: #2563eb; color: #fff; }
+  #error { color: red; padding: 16px; }
+  .filter { margin-bottom: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  input[type=date] { padding: 6px; border: 1px solid #ccc; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h2>📒 记账机器人账单</h2>
+  <div class="filter">
+    <label>日期筛选：</label>
+    <input type="date" id="dateFrom">
+    <span>至</span>
+    <input type="date" id="dateTo">
+    <button onclick="applyFilter()">筛选</button>
+    <button onclick="exportXlsx()">导出 xlsx</button>
+  </div>
+  <div id="error"></div>
+</div>
+
+<div class="card">
+  <div id="sessionTabs"></div>
+</div>
+
+<div class="card">
+  <h3 id="sessionTitle">当前账单</h3>
+  <div class="summary" id="summary"></div>
+</div>
+
+<div class="card">
+  <h3>入账记录</h3>
+  <table id="entriesTable">
+    <thead><tr><th>时间</th><th>金额</th><th>USDT</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h3>下发记录</h3>
+  <table id="disbTable">
+    <thead><tr><th>时间</th><th>金额 (USDT)</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<script>
+let allData = null;
+let currentSession = 'current';
+let dateFrom = '', dateTo = '';
+
+const params = new URLSearchParams(location.search);
+const id = params.get('id');
+const apiBase = params.get('api') || localStorage.getItem('apiBase') || '';
+
+if (!id) {
+  document.getElementById('error').textContent = '缺少 id 参数';
+} else if (!apiBase) {
+  document.getElementById('error').innerHTML =
+    '缺少 API 地址。请在 URL 中加入 ?api=https://your-bot-server.com&id=' + id;
+} else {
+  localStorage.setItem('apiBase', apiBase);
+  loadData();
+}
+
+async function loadData() {
+  try {
+    const res = await fetch(`${apiBase}/api/data?id=${id}`);
+    if (!res.ok) throw new Error(await res.text());
+    allData = await res.json();
+    renderTabs();
+    renderSession('current');
+  } catch(e) {
+    document.getElementById('error').textContent = '加载失败：' + e.message;
+  }
+}
+
+function renderTabs() {
+  const tabs = document.getElementById('sessionTabs');
+  tabs.innerHTML = '';
+  const cur = document.createElement('span');
+  cur.className = 'session-tab active';
+  cur.textContent = '当前';
+  cur.onclick = () => renderSession('current');
+  tabs.appendChild(cur);
+
+  allData.history.forEach((s, i) => {
+    const t = document.createElement('span');
+    t.className = 'session-tab';
+    t.textContent = `第${s.session}期`;
+    t.onclick = () => renderSession(i);
+    tabs.appendChild(t);
+  });
+}
+
+function renderSession(key) {
+  currentSession = key;
+  document.querySelectorAll('.session-tab').forEach((t, i) => {
+    t.classList.toggle('active', key === 'current' ? i === 0 : i === key + 1);
+  });
+
+  const s = key === 'current' ? allData.current : allData.history[key];
+  document.getElementById('sessionTitle').textContent =
+    key === 'current' ? '当前账单' : `第${s.session}期（${s.closed_at}）`;
+
+  const entries = filterByDate(s.entries);
+  const disbs = filterByDate(s.disbursements);
+
+  // Summary
+  const netInflow = entries.reduce((a, e) => a + e.amount, 0);
+  const fee = s.fee_rate || 0;
+  const rate = s.exchange_rate || 1;
+  const net = netInflow * (1 - fee / 100);
+  const disburse = net / rate;
+  const disbursed = disbs.reduce((a, d) => a + d.amount, 0);
+  const pending = disburse - disbursed;
+
+  document.getElementById('summary').innerHTML = `
+    <div class="stat"><label>总入款额</label><span>${netInflow.toFixed(2)}</span></div>
+    <div class="stat"><label>当前费率</label><span>${fee}%</span></div>
+    <div class="stat"><label>固定汇率</label><span>${rate}</span></div>
+    <div class="stat"><label>应下发</label><span>${disburse.toFixed(2)} USDT</span></div>
+    <div class="stat"><label>已下发</label><span>${disbursed.toFixed(2)} USDT</span></div>
+    <div class="stat"><label>待下发</label><span class="${pending < 0 ? 'neg' : 'pos'}">${pending.toFixed(2)} USDT</span></div>
+  `;
+
+  // Entries table
+  const eTbody = document.querySelector('#entriesTable tbody');
+  eTbody.innerHTML = '';
+  entries.forEach(e => {
+    const usdt = (e.amount / rate).toFixed(2);
+    const cls = e.amount >= 0 ? 'pos' : 'neg';
+    const sign = e.amount >= 0 ? '+' : '';
+    eTbody.innerHTML += `<tr><td>${e.time}</td><td class="${cls}">${sign}${e.amount}</td><td class="${cls}">${sign}${usdt}</td></tr>`;
+  });
+  if (!entries.length) eTbody.innerHTML = '<tr><td colspan="3" style="color:#999">无数据</td></tr>';
+
+  // Disbursements table
+  const dTbody = document.querySelector('#disbTable tbody');
+  dTbody.innerHTML = '';
+  disbs.forEach(d => {
+    dTbody.innerHTML += `<tr><td>${d.time}</td><td class="neg">${d.amount}</td></tr>`;
+  });
+  if (!disbs.length) dTbody.innerHTML = '<tr><td colspan="2" style="color:#999">无数据</td></tr>';
+}
+
+function filterByDate(records) {
+  if (!dateFrom && !dateTo) return records;
+  return records.filter(r => {
+    const d = r.time.split(' ')[0];
+    if (dateFrom && d < dateFrom) return false;
+    if (dateTo && d > dateTo) return false;
+    return true;
+  });
+}
+
+function applyFilter() {
+  dateFrom = document.getElementById('dateFrom').value;
+  dateTo = document.getElementById('dateTo').value;
+  renderSession(currentSession);
+}
+
+function exportXlsx() {
+  if (!allData) return;
+  const wb = XLSX.utils.book_new();
+
+  const s = currentSession === 'current' ? allData.current : allData.history[currentSession];
+  const entries = filterByDate(s.entries);
+  const disbs = filterByDate(s.disbursements);
+
+  const eRows = [['时间', '金额', 'USDT']];
+  const rate = s.exchange_rate || 1;
+  entries.forEach(e => eRows.push([e.time, e.amount, +(e.amount / rate).toFixed(2)]));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(eRows), '入账记录');
+
+  const dRows = [['时间', '金额(USDT)']];
+  disbs.forEach(d => dRows.push([d.time, d.amount]));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(dRows), '下发记录');
+
+  const label = currentSession === 'current' ? '当前' : `第${s.session}期`;
+  XLSX.writeFile(wb, `账单_${label}_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+</script>
+</body>
+</html>
