@@ -51,6 +51,14 @@
 </div>
 
 <div class="card">
+  <h3>按群组分类</h3>
+  <table id="groupsTable">
+    <thead><tr><th>群组</th><th>总入款</th><th>应下发</th><th>已下发</th><th>待下发</th></tr></thead>
+    <tbody><tr><td colspan="5" style="color:#999">加载中...</td></tr></tbody>
+  </table>
+</div>
+
+<div class="card">
   <h3>记账分类 — 按操作员</h3>
   <table id="opTable">
     <thead><tr><th>操作员</th><th>总入</th><th>总出</th><th>剩余</th></tr></thead>
@@ -91,6 +99,34 @@ if (!id) {
 } else {
   localStorage.setItem('apiBase', apiBase);
   loadData();
+  loadGroups();
+}
+
+async function loadGroups() {
+  try {
+    const res = await fetch(`${apiBase}/api/groups`, {
+      headers: { 'ngrok-skip-browser-warning': '1' }
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const tbody = document.querySelector('#groupsTable tbody');
+    tbody.innerHTML = '';
+    if (!data.groups.length) {
+      tbody.innerHTML = '<tr><td colspan="5" style="color:#999">无数据</td></tr>';
+      return;
+    }
+    data.groups.forEach(g => {
+      const pending = g.pending ?? 0;
+      const cls = pending < 0 ? 'neg' : 'pos';
+      tbody.innerHTML += `<tr>
+        <td><a href="?id=${g.encoded_id}&api=${apiBase}" style="color:#2563eb">${g.group_name}</a></td>
+        <td>${(g.net_inflow||0).toFixed(2)}</td>
+        <td>${g.disburse_amount != null ? g.disburse_amount.toFixed(2) : '-'}</td>
+        <td>${(g.total_disbursed||0).toFixed(2)}</td>
+        <td class="${cls}">${pending.toFixed(2)}</td>
+      </tr>`;
+    });
+  } catch(e) { /* silent */ }
 }
 
 async function loadData() {
