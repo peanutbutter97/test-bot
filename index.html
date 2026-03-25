@@ -87,7 +87,9 @@ if (!id) {
 
 async function loadData() {
   try {
-    const res = await fetch(`${apiBase}/api/data?id=${id}`);
+    const res = await fetch(`${apiBase}/api/data?id=${id}`, {
+      headers: { 'ngrok-skip-browser-warning': '1' }
+    });
     if (!res.ok) throw new Error(await res.text());
     allData = await res.json();
     renderTabs();
