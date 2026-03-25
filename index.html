@@ -6,264 +6,354 @@
 <title>记账机器人账单</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
-  body { font-family: sans-serif; max-width: 900px; margin: 0 auto; padding: 16px; background: #f5f5f5; }
-  h2 { color: #333; }
-  .card { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
-  .summary { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
-  .stat { background: #f0f4ff; border-radius: 6px; padding: 10px; }
-  .stat label { font-size: 12px; color: #666; }
-  .stat span { display: block; font-size: 20px; font-weight: bold; color: #333; }
-  table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  th { background: #f0f0f0; padding: 8px; text-align: left; }
-  td { padding: 8px; border-bottom: 1px solid #eee; }
-  .pos { color: #16a34a; } .neg { color: #dc2626; }
-  button { background: #2563eb; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; margin-right: 8px; }
-  button:hover { background: #1d4ed8; }
-  .session-tab { display: inline-block; padding: 6px 12px; margin: 4px; border-radius: 4px; cursor: pointer; background: #e5e7eb; }
-  .session-tab.active { background: #2563eb; color: #fff; }
-  #error { color: red; padding: 16px; }
-  .filter { margin-bottom: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  input[type=date] { padding: 6px; border: 1px solid #ccc; border-radius: 4px; }
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0f2f5;min-height:100vh;font-size:14px}
+.tip{background:#fffbe6;border-bottom:1px solid #ffe58f;padding:8px 16px;font-size:12px;color:#666;display:flex;justify-content:space-between;align-items:center}
+.tip a{color:#1677ff;cursor:pointer;text-decoration:none}
+.toolbar{background:#fff;padding:10px 16px;border-bottom:1px solid #eee;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.toolbar input[type=datetime-local]{padding:4px 8px;border:1px solid #d9d9d9;border-radius:4px;font-size:13px}
+.toolbar select{padding:4px 8px;border:1px solid #d9d9d9;border-radius:4px;font-size:13px}
+.btn{padding:5px 14px;border:none;border-radius:4px;cursor:pointer;font-size:13px}
+.btn-primary{background:#1677ff;color:#fff}
+.btn-default{background:#fff;border:1px solid #d9d9d9;color:#333}
+.btn:hover{opacity:.85}
+.content{max-width:960px;margin:0 auto;padding:12px}
+.card{background:#fff;border-radius:8px;margin-bottom:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.card-header{padding:12px 16px;border-bottom:1px solid #f0f0f0;font-weight:600;font-size:14px;display:flex;justify-content:space-between;align-items:center}
+.card-body{padding:0}
+table{width:100%;border-collapse:collapse}
+th{background:#fafafa;padding:10px 12px;text-align:left;font-weight:500;color:#666;font-size:13px;border-bottom:1px solid #f0f0f0}
+td{padding:10px 12px;border-bottom:1px solid #f5f5f5;font-size:13px}
+tr:last-child td{border-bottom:none}
+.pos{color:#52c41a}.neg{color:#ff4d4f}
+.collapse-btn{cursor:pointer;color:#1677ff;font-size:12px;user-select:none}
+.collapsible{display:none}
+.collapsible.open{display:block}
+.totals-bar{position:sticky;bottom:0;background:#fff;border-top:2px solid #1677ff;padding:10px 16px;display:flex;gap:24px;flex-wrap:wrap;box-shadow:0 -2px 8px rgba(0,0,0,.08)}
+.total-item{text-align:center}
+.total-item label{display:block;font-size:11px;color:#999}
+.total-item span{font-size:16px;font-weight:700;color:#333}
+.total-item span.neg{color:#ff4d4f}
+.total-item span.pos{color:#52c41a}
+#error{color:#ff4d4f;padding:16px;text-align:center}
+.tag{display:inline-block;padding:1px 6px;border-radius:3px;background:#e6f4ff;color:#1677ff;font-size:11px;margin-left:4px}
+@media(max-width:600px){.totals-bar{gap:12px}.total-item span{font-size:14px}}
 </style>
 </head>
 <body>
 
-<div class="card">
-  <h2>📒 记账机器人账单</h2>
-  <div class="filter">
-    <label>日期筛选：</label>
-    <input type="date" id="dateFrom">
-    <span>至</span>
-    <input type="date" id="dateTo">
-    <button onclick="applyFilter()">筛选</button>
-    <button onclick="exportXlsx()">导出 xlsx</button>
-  </div>
+<div class="tip">
+  <span>💡 点击分类标题可展开/收起，手机版请横屏查看</span>
+  <a onclick="clearAll()">清理所有点击痕迹</a>
+</div>
+
+<div class="toolbar">
+  <input type="datetime-local" id="dtFrom">
+  <span style="color:#999">至</span>
+  <input type="datetime-local" id="dtTo">
+  <select id="sessionSelect"><option value="current">当前账单</option></select>
+  <button class="btn btn-primary" onclick="applyFilter()">筛选</button>
+  <button class="btn btn-default" onclick="exportXlsx()">导出 xlsx</button>
   <div id="error"></div>
 </div>
 
-<div class="card">
-  <div id="sessionTabs"></div>
+<div class="content">
+
+  <!-- Entries -->
+  <div class="card">
+    <div class="card-header">
+      <span id="entryTitle">入账(0笔)</span>
+    </div>
+    <div class="card-body">
+      <table id="entriesTable">
+        <thead><tr><th>时间</th><th>金额</th><th>USDT</th><th>操作员</th><th>标记</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Disbursements -->
+  <div class="card">
+    <div class="card-header">
+      <span id="disbTitle">下发(0笔)</span>
+    </div>
+    <div class="card-body">
+      <table id="disbTable">
+        <thead><tr><th>时间</th><th>金额 (USDT)</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Classification -->
+  <div class="card">
+    <div class="card-header">记账分类</div>
+    <div class="card-body" style="padding:8px 0">
+
+      <div style="padding:8px 16px;border-bottom:1px solid #f5f5f5">
+        <span class="collapse-btn" onclick="toggleSection('byOp')">▶ 按操作员分类</span>
+        <div id="byOp" class="collapsible">
+          <table style="margin-top:8px">
+            <thead><tr><th>操作员</th><th>总入</th><th>总出</th><th>剩余</th></tr></thead>
+            <tbody id="byOpBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style="padding:8px 16px;border-bottom:1px solid #f5f5f5">
+        <span class="collapse-btn" onclick="toggleSection('byTag')">▶ 按标记类分组</span>
+        <div id="byTag" class="collapsible">
+          <table style="margin-top:8px">
+            <thead><tr><th>标记</th><th>总入</th><th>总出</th><th>剩余</th></tr></thead>
+            <tbody id="byTagBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style="padding:8px 16px;border-bottom:1px solid #f5f5f5">
+        <span class="collapse-btn" onclick="toggleSection('byRate')">▶ 按入款汇率分类</span>
+        <div id="byRate" class="collapsible">
+          <table style="margin-top:8px">
+            <thead><tr><th>汇率</th><th>总入</th><th>总出</th><th>剩余</th></tr></thead>
+            <tbody id="byRateBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style="padding:8px 16px">
+        <span class="collapse-btn" onclick="toggleSection('byRateOp')">▶ 按入款汇率和操作人分类</span>
+        <div id="byRateOp" class="collapsible">
+          <table style="margin-top:8px">
+            <thead><tr><th>操作员</th><th>汇率</th><th>总入</th><th>总出</th><th>剩余</th></tr></thead>
+            <tbody id="byRateOpBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
 </div>
 
-<div class="card">
-  <h3 id="sessionTitle">当前账单</h3>
-  <div class="summary" id="summary"></div>
-</div>
-
-<div class="card">
-  <h3>按群组分类</h3>
-  <table id="groupsTable">
-    <thead><tr><th>群组</th><th>总入款</th><th>应下发</th><th>已下发</th><th>待下发</th></tr></thead>
-    <tbody><tr><td colspan="5" style="color:#999">加载中...</td></tr></tbody>
-  </table>
-</div>
-
-<div class="card">
-  <h3>记账分类 — 按操作员</h3>
-  <table id="opTable">
-    <thead><tr><th>操作员</th><th>总入</th><th>总出</th><th>剩余</th></tr></thead>
-    <tbody></tbody>
-  </table>
-</div>
-
-<div class="card">
-  <h3>入账记录</h3>
-  <table id="entriesTable">
-    <thead><tr><th>时间</th><th>金额</th><th>USDT</th></tr></thead>
-    <tbody></tbody>
-  </table>
-</div>
-
-<div class="card">
-  <h3>下发记录</h3>
-  <table id="disbTable">
-    <thead><tr><th>时间</th><th>金额 (USDT)</th></tr></thead>
-    <tbody></tbody>
-  </table>
+<!-- Sticky totals bar -->
+<div class="totals-bar">
+  <div class="total-item"><label>总入款</label><span id="t-inflow">0.00</span></div>
+  <div class="total-item"><label>应下发</label><span id="t-disburse">0.00</span></div>
+  <div class="total-item"><label>已下发</label><span id="t-disbursed">0.00</span></div>
+  <div class="total-item"><label>待下发</label><span id="t-pending">0.00</span></div>
+  <div class="total-item"><label>费率</label><span id="t-fee">-</span></div>
+  <div class="total-item"><label>汇率</label><span id="t-rate">-</span></div>
 </div>
 
 <script>
 let allData = null;
 let currentSession = 'current';
-let dateFrom = '', dateTo = '';
+let dtFrom = '', dtTo = '';
 
 const params = new URLSearchParams(location.search);
 const id = params.get('id');
-const apiBase = params.get('api') || localStorage.getItem('apiBase') || '';
+const apiBase = (params.get('api') || localStorage.getItem('apiBase') || '').replace(/\/$/, '');
 
 if (!id) {
   document.getElementById('error').textContent = '缺少 id 参数';
 } else if (!apiBase) {
-  document.getElementById('error').innerHTML =
-    '缺少 API 地址。请在 URL 中加入 ?api=https://your-bot-server.com&id=' + id;
+  document.getElementById('error').textContent = '缺少 api 参数，请通过机器人发送 查账 获取链接';
 } else {
   localStorage.setItem('apiBase', apiBase);
+  // Set default time range to today
+  const now = new Date();
+  const start = new Date(now); start.setHours(0,0,0,0);
+  document.getElementById('dtFrom').value = toLocalDT(start);
+  document.getElementById('dtTo').value = toLocalDT(now);
   loadData();
-  loadGroups();
 }
 
-async function loadGroups() {
-  try {
-    const res = await fetch(`${apiBase}/api/groups`, {
-      headers: { 'ngrok-skip-browser-warning': '1' }
-    });
-    if (!res.ok) return;
-    const data = await res.json();
-    const tbody = document.querySelector('#groupsTable tbody');
-    tbody.innerHTML = '';
-    if (!data.groups.length) {
-      tbody.innerHTML = '<tr><td colspan="5" style="color:#999">无数据</td></tr>';
-      return;
-    }
-    data.groups.forEach(g => {
-      const pending = g.pending ?? 0;
-      const cls = pending < 0 ? 'neg' : 'pos';
-      tbody.innerHTML += `<tr>
-        <td><a href="?id=${g.encoded_id}&api=${apiBase}" style="color:#2563eb">${g.group_name}</a></td>
-        <td>${(g.net_inflow||0).toFixed(2)}</td>
-        <td>${g.disburse_amount != null ? g.disburse_amount.toFixed(2) : '-'}</td>
-        <td>${(g.total_disbursed||0).toFixed(2)}</td>
-        <td class="${cls}">${pending.toFixed(2)}</td>
-      </tr>`;
-    });
-  } catch(e) { /* silent */ }
+function toLocalDT(d) {
+  return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes());
 }
+function pad(n){return String(n).padStart(2,'0')}
 
 async function loadData() {
   try {
     const res = await fetch(`${apiBase}/api/data?id=${id}`, {
-      headers: { 'ngrok-skip-browser-warning': '1' }
+      headers: {'ngrok-skip-browser-warning': '1'}
     });
     if (!res.ok) throw new Error(await res.text());
     allData = await res.json();
-    renderTabs();
+    buildSessionSelect();
     renderSession('current');
   } catch(e) {
     document.getElementById('error').textContent = '加载失败：' + e.message;
   }
 }
 
-function renderTabs() {
-  const tabs = document.getElementById('sessionTabs');
-  tabs.innerHTML = '';
-  const cur = document.createElement('span');
-  cur.className = 'session-tab active';
-  cur.textContent = '当前';
-  cur.onclick = () => renderSession('current');
-  tabs.appendChild(cur);
-
+function buildSessionSelect() {
+  const sel = document.getElementById('sessionSelect');
+  sel.innerHTML = '<option value="current">当前账单</option>';
   allData.history.forEach((s, i) => {
-    const t = document.createElement('span');
-    t.className = 'session-tab';
-    t.textContent = `第${s.session}期`;
-    t.onclick = () => renderSession(i);
-    tabs.appendChild(t);
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = `第${s.session}期（${s.closed_at.slice(0,10)}）`;
+    sel.appendChild(opt);
   });
+  sel.onchange = () => renderSession(sel.value === 'current' ? 'current' : parseInt(sel.value));
 }
 
 function renderSession(key) {
   currentSession = key;
-  document.querySelectorAll('.session-tab').forEach((t, i) => {
-    t.classList.toggle('active', key === 'current' ? i === 0 : i === key + 1);
-  });
-
   const s = key === 'current' ? allData.current : allData.history[key];
-  document.getElementById('sessionTitle').textContent =
-    key === 'current' ? '当前账单' : `第${s.session}期（${s.closed_at}）`;
-
-  const entries = filterByDate(s.entries);
-  const disbs = filterByDate(s.disbursements);
-
-  // Summary
-  const netInflow = entries.reduce((a, e) => a + e.amount, 0);
-  const fee = s.fee_rate || 0;
+  const entries = filterByDT(s.entries);
+  const disbs = filterByDT(s.disbursements);
   const rate = s.exchange_rate || 1;
-  const net = netInflow * (1 - fee / 100);
-  const disburse = net / rate;
-  const disbursed = disbs.reduce((a, d) => a + d.amount, 0);
+  const fee = s.fee_rate || 0;
+
+  // Totals
+  const inflow = entries.filter(e=>e.amount>0).reduce((a,e)=>a+e.amount,0);
+  const outflow = entries.filter(e=>e.amount<0).reduce((a,e)=>a+e.amount,0);
+  const net = inflow + outflow;
+  const netAfterFee = net * (1 - fee/100);
+  const disburse = netAfterFee / rate;
+  const disbursed = disbs.reduce((a,d)=>a+d.amount,0);
   const pending = disburse - disbursed;
 
-  document.getElementById('summary').innerHTML = `
-    <div class="stat"><label>总入款额</label><span>${netInflow.toFixed(2)}</span></div>
-    <div class="stat"><label>当前费率</label><span>${fee}%</span></div>
-    <div class="stat"><label>固定汇率</label><span>${rate}</span></div>
-    <div class="stat"><label>应下发</label><span>${disburse.toFixed(2)} USDT</span></div>
-    <div class="stat"><label>已下发</label><span>${disbursed.toFixed(2)} USDT</span></div>
-    <div class="stat"><label>待下发</label><span class="${pending < 0 ? 'neg' : 'pos'}">${pending.toFixed(2)} USDT</span></div>
-  `;
-
-  // Operator grouping
-  const opTbody = document.querySelector('#opTable tbody');
-  opTbody.innerHTML = '';
-  const byOp = s.by_operator || [];
-  if (byOp.length) {
-    byOp.forEach(g => {
-      const netCls = g.net >= 0 ? 'pos' : 'neg';
-      opTbody.innerHTML += `<tr>
-        <td>${g.operator}</td>
-        <td class="pos">+${g.inflow.toFixed(2)}</td>
-        <td class="neg">${g.outflow.toFixed(2)}</td>
-        <td class="${netCls}">${g.net.toFixed(2)}</td>
-      </tr>`;
-    });
-  } else {
-    opTbody.innerHTML = '<tr><td colspan="4" style="color:#999">无数据</td></tr>';
-  }
+  document.getElementById('t-inflow').textContent = net.toFixed(2);
+  document.getElementById('t-disburse').textContent = disburse.toFixed(2);
+  document.getElementById('t-disbursed').textContent = disbursed.toFixed(2);
+  const pEl = document.getElementById('t-pending');
+  pEl.textContent = pending.toFixed(2);
+  pEl.className = pending < 0 ? 'neg' : '';
+  document.getElementById('t-fee').textContent = fee + '%';
+  document.getElementById('t-rate').textContent = rate;
 
   // Entries table
+  document.getElementById('entryTitle').textContent = `入账(${entries.length}笔)`;
   const eTbody = document.querySelector('#entriesTable tbody');
   eTbody.innerHTML = '';
-  entries.forEach(e => {
-    const usdt = (e.amount / rate).toFixed(2);
-    const cls = e.amount >= 0 ? 'pos' : 'neg';
-    const sign = e.amount >= 0 ? '+' : '';
-    eTbody.innerHTML += `<tr><td>${e.time}</td><td class="${cls}">${sign}${e.amount}</td><td class="${cls}">${sign}${usdt}</td></tr>`;
-  });
-  if (!entries.length) eTbody.innerHTML = '<tr><td colspan="3" style="color:#999">无数据</td></tr>';
+  if (!entries.length) {
+    eTbody.innerHTML = '<tr><td colspan="5" style="color:#999;text-align:center">无数据</td></tr>';
+  } else {
+    entries.forEach(e => {
+      const usdt = (e.amount / rate).toFixed(2);
+      const cls = e.amount >= 0 ? 'pos' : 'neg';
+      const sign = e.amount >= 0 ? '+' : '';
+      const tag = e.tag ? `<span class="tag">#${e.tag}</span>` : '';
+      eTbody.innerHTML += `<tr>
+        <td>${e.time.slice(11,16)}</td>
+        <td class="${cls}">${sign}${e.amount}${tag}</td>
+        <td class="${cls}">${sign}${usdt}</td>
+        <td>${e.operator_name || '-'}</td>
+        <td>${e.tag ? '#'+e.tag : '-'}</td>
+      </tr>`;
+    });
+  }
 
-  // Disbursements table
+  // Disbursements
+  document.getElementById('disbTitle').textContent = `下发(${disbs.length}笔)`;
   const dTbody = document.querySelector('#disbTable tbody');
   dTbody.innerHTML = '';
-  disbs.forEach(d => {
-    dTbody.innerHTML += `<tr><td>${d.time}</td><td class="neg">${d.amount}</td></tr>`;
-  });
-  if (!disbs.length) dTbody.innerHTML = '<tr><td colspan="2" style="color:#999">无数据</td></tr>';
+  if (!disbs.length) {
+    dTbody.innerHTML = '<tr><td colspan="2" style="color:#999;text-align:center">无数据</td></tr>';
+  } else {
+    disbs.forEach(d => {
+      dTbody.innerHTML += `<tr><td>${d.time.slice(11,16)}</td><td class="neg">${d.amount}</td></tr>`;
+    });
+  }
+
+  // Groupings — recompute from filtered entries
+  renderGroupTable('byOpBody', groupBy(entries, e => e.operator_name || '未知'), ['operator','总入','总出','剩余']);
+  renderGroupTable('byTagBody', groupBy(entries, e => e.tag || '未标记'), ['tag','总入','总出','剩余']);
+  renderGroupTable('byRateBody', [{rate, inflow, outflow: outflow, net}], ['rate','总入','总出','剩余'], true);
+  renderGroupTable('byRateOpBody', groupByRateOp(entries, rate), ['operator','rate','总入','总出','剩余'], false, true);
 }
 
-function filterByDate(records) {
-  if (!dateFrom && !dateTo) return records;
+function groupBy(entries, keyFn) {
+  const m = {};
+  entries.forEach(e => {
+    const k = keyFn(e);
+    if (!m[k]) m[k] = {key: k, inflow: 0, outflow: 0};
+    if (e.amount > 0) m[k].inflow += e.amount;
+    else m[k].outflow += e.amount;
+  });
+  return Object.values(m).map(g => ({...g, net: g.inflow + g.outflow}));
+}
+
+function groupByRateOp(entries, rate) {
+  const m = {};
+  entries.forEach(e => {
+    const k = e.operator_name || '未知';
+    if (!m[k]) m[k] = {key: k, rate, inflow: 0, outflow: 0};
+    if (e.amount > 0) m[k].inflow += e.amount;
+    else m[k].outflow += e.amount;
+  });
+  return Object.values(m).map(g => ({...g, net: g.inflow + g.outflow}));
+}
+
+function renderGroupTable(tbodyId, rows, cols, isRate=false, isRateOp=false) {
+  const tbody = document.getElementById(tbodyId);
+  tbody.innerHTML = '';
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="${cols.length}" style="color:#999;text-align:center">无数据</td></tr>`;
+    return;
+  }
+  rows.forEach(r => {
+    const net = r.net || 0;
+    const cls = net < 0 ? 'neg' : net > 0 ? 'pos' : '';
+    if (isRateOp) {
+      tbody.innerHTML += `<tr><td>${r.key}</td><td>${r.rate}</td><td class="pos">+${r.inflow.toFixed(2)}</td><td class="neg">${r.outflow.toFixed(2)}</td><td class="${cls}">${net.toFixed(2)}</td></tr>`;
+    } else if (isRate) {
+      tbody.innerHTML += `<tr><td>${r.rate}</td><td class="pos">+${r.inflow.toFixed(2)}</td><td class="neg">${r.outflow.toFixed(2)}</td><td class="${cls}">${net.toFixed(2)}</td></tr>`;
+    } else {
+      tbody.innerHTML += `<tr><td>${r.key}</td><td class="pos">+${r.inflow.toFixed(2)}</td><td class="neg">${r.outflow.toFixed(2)}</td><td class="${cls}">${net.toFixed(2)}</td></tr>`;
+    }
+  });
+}
+
+function toggleSection(id) {
+  const el = document.getElementById(id);
+  const btn = el.previousElementSibling;
+  el.classList.toggle('open');
+  btn.textContent = btn.textContent.replace(/[▶▼]/, el.classList.contains('open') ? '▼' : '▶');
+}
+
+function filterByDT(records) {
+  const from = dtFrom ? new Date(dtFrom) : null;
+  const to = dtTo ? new Date(dtTo) : null;
   return records.filter(r => {
-    const d = r.time.split(' ')[0];
-    if (dateFrom && d < dateFrom) return false;
-    if (dateTo && d > dateTo) return false;
+    const d = new Date(r.time);
+    if (from && d < from) return false;
+    if (to && d > to) return false;
     return true;
   });
 }
 
 function applyFilter() {
-  dateFrom = document.getElementById('dateFrom').value;
-  dateTo = document.getElementById('dateTo').value;
-  renderSession(currentSession);
+  dtFrom = document.getElementById('dtFrom').value;
+  dtTo = document.getElementById('dtTo').value;
+  if (allData) renderSession(currentSession);
+}
+
+function clearAll() {
+  localStorage.removeItem('apiBase');
+  location.href = location.pathname;
 }
 
 function exportXlsx() {
   if (!allData) return;
+  const s = currentSession === 'current' ? allData.current : allData.history[currentSession];
+  const entries = filterByDT(s.entries);
+  const disbs = filterByDT(s.disbursements);
+  const rate = s.exchange_rate || 1;
   const wb = XLSX.utils.book_new();
 
-  const s = currentSession === 'current' ? allData.current : allData.history[currentSession];
-  const entries = filterByDate(s.entries);
-  const disbs = filterByDate(s.disbursements);
-
-  const eRows = [['时间', '金额', 'USDT']];
-  const rate = s.exchange_rate || 1;
-  entries.forEach(e => eRows.push([e.time, e.amount, +(e.amount / rate).toFixed(2)]));
+  const eRows = [['时间','金额','USDT','操作员','标记']];
+  entries.forEach(e => eRows.push([e.time, e.amount, +(e.amount/rate).toFixed(2), e.operator_name||'', e.tag||'']));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(eRows), '入账记录');
 
-  const dRows = [['时间', '金额(USDT)']];
+  const dRows = [['时间','金额(USDT)']];
   disbs.forEach(d => dRows.push([d.time, d.amount]));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(dRows), '下发记录');
 
-  const label = currentSession === 'current' ? '当前' : `第${s.session}期`;
+  const label = currentSession === 'current' ? '当前' : `第${allData.history[currentSession].session}期`;
   XLSX.writeFile(wb, `账单_${label}_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 </script>
